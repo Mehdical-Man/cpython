@@ -15,7 +15,13 @@ def any(name, alternates):
 
 
 def make_pat():
-    kw = r"\b" + any("KEYWORD", keyword.kwlist) + r"\b"
+    #
+    kw = r"\b" + any("KEYWORD", keyword.kwlist
+                     + ["__debug__"]  # __debug__ is a constant so should
+                     # therefore be highlighted with "KEYWORD".
+                     # It is added here to avoid __debug__ appearing in the
+                     # autocomplete list twice.
+                     ) + r"\b"
     match_softkw = (
         r"^[ \t]*" +  # at beginning of line + possible indentation
         r"(?P<MATCH_SOFTKW>match)\b" +
@@ -64,7 +70,24 @@ def make_pat():
 
 
 prog = make_pat()
-idprog = re.compile(r"\s+(\w+)")
+
+XID_START = "".join(
+    chr(x) for x in range(0x41, 0xEFFFE)
+    if chr(x).isidentifier() # Forbids leading digits from being
+    # highlighted in function/class definitions.
+)
+XID_CONTINUE = "".join(
+    chr(x) for x in range(0x5F, 0xEFFFE)
+    if ("_" + chr(x)).isidentifier() # Allows non-ASCII characters
+    # such as "·" (U+00B7) to be highlighted in function/class definitions
+    # Refer to PEP 3131
+)
+idprog = re.compile(
+    r"\s+("
+    f"[{XID_START}]"
+    f"[{XID_CONTINUE}]*"
+    r")"
+)
 prog_group_name_to_tag = {
     "MATCH_SOFTKW": "KEYWORD",
     "CASE_SOFTKW": "KEYWORD",
@@ -170,6 +193,8 @@ class ColorDelegator(Delegator):
             "SYNC": {'background': None, 'foreground': None},
             "TODO": {'background': None, 'foreground': None},
             "ERROR": idleConf.GetHighlight(theme, "error"),
+            "console": idleConf.GetHighlight(theme, "console"), # Highlights "[DEBUG ON]" and "[DEBUG OFF]".
+            # ------------------------------------------------------------------------------------------
             # "hit" is used by ReplaceDialog to mark matches. It shouldn't be changed by Colorizer, but
             # that currently isn't technically possible. This should be moved elsewhere in the future
             # when fixing the "hit" tag's visibility, or when the replace dialog is replaced with a
